@@ -1,8 +1,8 @@
-class Lld < Formula
+class LldAT2214 < Formula
   desc "LLVM Project Linker"
   homepage "https://lld.llvm.org/"
-  url "https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.5/llvm-project-22.1.5.src.tar.xz"
-  sha256 "7972b87b705a003ce70ab55f9f0fb495d156887cba0eb296d284731139118e2c"
+  url "https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.4/llvm-project-22.1.4.src.tar.xz"
+  sha256 "3e68c90dda630c27d41d201e37b8bbf5222e39b273dec5ca880709c69e0a07d4"
   # The LLVM Project is under the Apache License v2.0 with LLVM Exceptions
   license "Apache-2.0" => { with: "LLVM-exception" }
   compatibility_version 1
@@ -12,14 +12,7 @@ class Lld < Formula
     formula "llvm"
   end
 
-  bottle do
-    sha256 cellar: :any,                 arm64_tahoe:   "31815e2ee79749d1271822e8e6314df207979f081d2f31f1aa587c01aaff7b37"
-    sha256 cellar: :any,                 arm64_sequoia: "d5f62dcdfefe3a047fe5982d12e9eefce265e9ef239d7d3a0b9cc4ed3ce9b4ce"
-    sha256 cellar: :any,                 arm64_sonoma:  "ad8b9e085e5e9167aebbd8764900d4786ca9953466287ae0b16b7730ff235637"
-    sha256 cellar: :any,                 sonoma:        "0176c8d7e1e1d81594241708c58f60c743f836dd181a8f09c90459a0d9b00cee"
-    sha256 cellar: :any_skip_relocation, arm64_linux:   "9eb0c26b1a7400a4dc0b2e96d0d51dc0b1ea6e6cf5f6215b24e71096bf0ec65b"
-    sha256 cellar: :any_skip_relocation, x86_64_linux:  "b0b5b0d6b4cd1449e67f852e41c0c7590bd4d8c72be7b46e80fab0febcd0e97c"
-  end
+  keg_only :versioned_formula
 
   depends_on "cmake" => :build
   depends_on "llvm"
