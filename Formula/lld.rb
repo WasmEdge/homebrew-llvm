@@ -6,6 +6,13 @@ class Lld < Formula
   # The LLVM Project is under the Apache License v2.0 with LLVM Exceptions
   license "Apache-2.0" => { with: "LLVM-exception" }
   compatibility_version 1
+
+  bottle do
+    root_url "https://github.com/WasmEdge/homebrew-llvm/releases/download/bottle-lld"
+    rebuild 1
+    sha256 cellar: :any, arm64_sonoma: "d3a2cb25cd72738613c01ae493c4be56f34641486e88a7ad4a0a0757b45ec2b7"
+    sha256 cellar: :any, sequoia:      "a317f623ae6b553a1f652077caa27c613548ea531485ebee80a12ee7ad52a160"
+  end
   head "https://github.com/llvm/llvm-project.git", branch: "main"
 
   livecheck do
