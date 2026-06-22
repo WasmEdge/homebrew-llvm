@@ -1,0 +1,116 @@
+name: Build lld bottles
+
+# Builds `lld` bottles for both macOS arches, publishes them to the
+# `bottle-lld` release, and opens a PR updating Formula/lld.rb's `bottle do`
+# block. Once merged, `brew install WasmEdge/llvm/lld` pours instead of
+# compiling from source (what WasmEdge CI does on every macOS run).
+# Auto-PR needs Settings → Actions → "Allow GitHub Actions to create PRs".
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - Formula/lld.rb
+      - .github/workflows/build-bottles.yml
+
+permissions:
+  contents: read
+
+env:
+  ROOT_URL: https://github.com/WasmEdge/homebrew-llvm/releases/download/bottle-lld
+  RELEASE_TAG: bottle-lld
+
+jobs:
+  build:
+    name: Bottle on ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # 1:1 with WasmEdge CI's macOS runners (the sole consumer); macOS 15
+        # arm64 has no CI job, so arm64_sequoia is omitted and falls back to source.
+        include:
+          - runner: macos-15-intel
+          - runner: macos-14
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Build the bottle
+        run: |
+          brew update
+          # Tap THIS checkout so we bottle this formula.
+          brew tap WasmEdge/llvm "$PWD"
+          # Homebrew won't load an untrusted 3rd-party tap without this.
+          brew trust wasmedge/llvm
+          brew install --build-bottle WasmEdge/llvm/lld
+          brew bottle --json --root-url="${ROOT_URL}" WasmEdge/llvm/lld
+
+      - name: Upload bottle artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bottle-${{ matrix.runner }}
+          path: |
+            *.bottle*.tar.gz
+            *.bottle*.json
+          if-no-files-found: error
+
+  publish:
+    name: Publish bottles and update formula
+    needs: build
+    runs-on: macos-14
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Download all bottle artifacts
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          path: bottles
+          merge-multiple: true
+
+      - name: Merge bottle blocks into the formula
+        run: |
+          brew update
+          brew tap WasmEdge/llvm "$PWD"
+          brew trust wasmedge/llvm
+          cp bottles/*.json .
+          # Write the `bottle do` block into the formula (no commit).
+          brew bottle --merge --write --no-commit *.json
+          # `--write` edits brew's tap copy; copy it back for the PR.
+          cp "$(brew formula wasmedge/llvm/lld)" Formula/lld.rb
+
+      - name: Publish bottles to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd bottles
+          # brew writes double-dash local names but fetches single-dash; rename.
+          for f in *.bottle*.tar.gz; do
+            [ -e "$f" ] || continue
+            mv -n "$f" "$(echo "$f" | sed 's/--/-/')"
+          done
+          gh release create "${RELEASE_TAG}" *.bottle*.tar.gz \
+            --title "lld bottles" \
+            --notes "Prebuilt lld bottles consumed by WasmEdge CI." \
+          || gh release upload "${RELEASE_TAG}" *.bottle*.tar.gz --clobber
+
+      - name: Open a PR with the updated formula
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- Formula/lld.rb; then
+            echo "Formula/lld.rb unchanged; nothing to PR."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c bottle/lld-update
+          git add Formula/lld.rb
+          git commit -s -m "feat: add prebuilt lld bottles"
+          git push -u origin bottle/lld-update --force
+          gh pr create --fill --head bottle/lld-update --base main \
+          || echo "PR not auto-created (enable 'Allow GitHub Actions to create PRs'); branch pushed for manual PR."
