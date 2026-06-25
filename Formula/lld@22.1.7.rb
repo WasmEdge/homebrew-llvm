@@ -1,18 +1,13 @@
-class Lld < Formula
+class LldAT2217 < Formula
   desc "LLVM Project Linker"
   homepage "https://lld.llvm.org/"
-  url "https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/llvm-project-22.1.8.src.tar.xz"
-  sha256 "922f1817a0df7b1489272d18134ee0087a8b068828f87ac63b9861b1a9965888"
+  url "https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.7/llvm-project-22.1.7.src.tar.xz"
+  sha256 "5cc4a3f12bba50b6bdfb4b61bdc852117a0ff2517807c3902fc13267fb93562e"
   # The LLVM Project is under the Apache License v2.0 with LLVM Exceptions
   license "Apache-2.0" => { with: "LLVM-exception" }
   compatibility_version 1
 
-  bottle do
-    root_url "https://github.com/WasmEdge/homebrew-llvm/releases/download/bottle-lld"
-    rebuild 1
-    sha256 cellar: :any, arm64_sonoma: "bd71c1bca8340dc44633b6edb61459c549428bdd5e988a7ab8218fa519ea8ae8"
-    sha256 cellar: :any, sequoia:      "059c19c1e3f86a3f0387bbe9db1551809ef4e2b3e1f32743d1cc4bc9929bb251"
-  end
+  keg_only :versioned_formula
   head "https://github.com/llvm/llvm-project.git", branch: "main"
 
   livecheck do
