@@ -7,6 +7,12 @@ class LldAT2217 < Formula
   license "Apache-2.0" => { with: "LLVM-exception" }
   compatibility_version 1
 
+  bottle do
+    root_url "https://github.com/WasmEdge/homebrew-llvm/releases/download/bottle-lld"
+    rebuild 1
+    sha256 cellar: :any, arm64_sonoma: "c77cfb44f902612d1f86220d2c26b027f6b95a92bf35d4886899fe5da661adee"
+  end
+
   keg_only :versioned_formula
   head "https://github.com/llvm/llvm-project.git", branch: "main"
 

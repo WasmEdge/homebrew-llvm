@@ -9,9 +9,8 @@ class Lld < Formula
 
   bottle do
     root_url "https://github.com/WasmEdge/homebrew-llvm/releases/download/bottle-lld"
-    rebuild 1
-    sha256 cellar: :any, arm64_sonoma: "bd71c1bca8340dc44633b6edb61459c549428bdd5e988a7ab8218fa519ea8ae8"
-    sha256 cellar: :any, sequoia:      "059c19c1e3f86a3f0387bbe9db1551809ef4e2b3e1f32743d1cc4bc9929bb251"
+    rebuild 2
+    sha256 cellar: :any, sequoia: "a9c9b49af0fdd1cdc05046d97c48aabbc89927afea6671c3135dbfc1fa98fadf"
   end
   head "https://github.com/llvm/llvm-project.git", branch: "main"
 
