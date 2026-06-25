@@ -1,17 +1,23 @@
 name: Build lld bottles
 
-# Builds `lld` bottles for both macOS arches, publishes them to the
-# `bottle-lld` release, and opens a PR updating Formula/lld.rb's `bottle do`
-# block. Once merged, `brew install WasmEdge/llvm/lld` pours instead of
-# compiling from source (what WasmEdge CI does on every macOS run).
-# Auto-PR needs Settings → Actions → "Allow GitHub Actions to create PRs".
+# Builds `lld` bottles for WasmEdge CI's macOS runners and publishes them to
+# the `bottle-lld` release, then opens a PR adding each `bottle do` block.
+#
+# `lld` links Homebrew's `llvm`, so a bottle is only ABI-valid against the
+# exact llvm version it was built with -- and different macOS runner images
+# ship different Homebrew llvm versions at the same time. So each runner
+# bottles the formula matching *its own* Homebrew llvm: the main `lld` when
+# its version equals llvm's, otherwise the archived `lld@<llvm-version>`.
+# That mirrors WasmEdge's `Resolve matching lld formula` step exactly, so
+# every runner pours a bottle built against the llvm it actually has.
+#
+# Manual-only (workflow_dispatch): run it after a version bump or whenever a
+# runner image's llvm drifts and CI falls back to building lld from source.
+# (A push trigger would re-fire on the bottle-block merge and rebuild forever.)
+# Auto-PR needs Settings -> Actions -> "Allow GitHub Actions to create PRs".
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - Formula/lld.rb
-      - .github/workflows/build-bottles.yml
 
 permissions:
   contents: read
@@ -21,34 +27,13 @@ env:
   RELEASE_TAG: bottle-lld
 
 jobs:
-  check:
-    name: Decide whether bottles need building
-    runs-on: ubuntu-latest
-    outputs:
-      build: ${{ steps.gate.outputs.build }}
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - id: gate
-        # Skip when the formula already carries a bottle block, else every
-        # Formula/lld.rb push rebuilds and bumps the rebuild number forever.
-        # A version bump must remove the block (see updating-homebrew-tap-formula).
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || ! grep -q "bottle do" Formula/lld.rb; then
-            echo "build=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Formula already has a bottle block; skipping rebuild."
-            echo "build=false" >> "$GITHUB_OUTPUT"
-          fi
-
   build:
     name: Bottle on ${{ matrix.runner }}
-    needs: check
-    if: needs.check.outputs.build == 'true'
     strategy:
       fail-fast: false
       matrix:
-        # 1:1 with WasmEdge CI's macOS runners (the sole consumer); macOS 15
-        # arm64 has no CI job, so arm64_sequoia is omitted and falls back to source.
+        # 1:1 with WasmEdge CI's macOS runners (the sole consumer). macOS 15
+        # arm64 has no CI job, so arm64_sequoia is intentionally never built.
         include:
           - runner: macos-15-intel
           - runner: macos-14
@@ -56,15 +41,37 @@ jobs:
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      - name: Build the bottle
+      - name: Build the bottle for this runner's llvm version
         run: |
           brew update
-          # Tap THIS checkout so we bottle this formula.
+          # Tap THIS checkout so we bottle these formulae.
           brew tap WasmEdge/llvm "$PWD"
           # Homebrew won't load an untrusted 3rd-party tap without this.
           brew trust wasmedge/llvm
-          brew install --build-bottle WasmEdge/llvm/lld
-          brew bottle --json --root-url="${ROOT_URL}" WasmEdge/llvm/lld
+
+          # Pick the formula whose version matches this runner's Homebrew llvm.
+          LLVM_VERSION=$(brew info --json llvm | jq -r '.[0].versions.stable')
+          LLD_VERSION=$(brew info --json WasmEdge/llvm/lld | jq -r '.[0].versions.stable')
+          echo "Homebrew llvm: ${LLVM_VERSION}; main lld: ${LLD_VERSION}"
+          if [ "${LLVM_VERSION}" = "${LLD_VERSION}" ]; then
+            FORMULA="lld"
+          else
+            FORMULA="lld@${LLVM_VERSION}"
+          fi
+          FORMULA_FILE="Formula/${FORMULA}.rb"
+          if [ ! -f "${FORMULA_FILE}" ]; then
+            echo "::error::No formula ${FORMULA_FILE} for llvm ${LLVM_VERSION}." \
+                 "Bump the main lld or archive this version first."
+            exit 1
+          fi
+          echo "Bottling ${FORMULA} against llvm ${LLVM_VERSION}"
+
+          # Drop any existing bottle block so the rebuilt bottle starts clean
+          # (no ever-incrementing rebuild number).
+          perl -0777 -pi -e 's/\n  bottle do\n.*?\n  end\n/\n/s' "${FORMULA_FILE}"
+
+          brew install --build-bottle "WasmEdge/llvm/${FORMULA}"
+          brew bottle --json --root-url="${ROOT_URL}" "WasmEdge/llvm/${FORMULA}"
 
       - name: Upload bottle artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -76,9 +83,8 @@ jobs:
           if-no-files-found: error
 
   publish:
-    name: Publish bottles and update formula
-    needs: [check, build]
-    if: needs.check.outputs.build == 'true'
+    name: Publish bottles and update formulae
+    needs: build
     runs-on: macos-14
     permissions:
       contents: write
@@ -94,23 +100,29 @@ jobs:
           path: bottles
           merge-multiple: true
 
-      - name: Merge bottle blocks into the formula
+      - name: Merge bottle blocks into each formula
         run: |
           brew update
           brew tap WasmEdge/llvm "$PWD"
           brew trust wasmedge/llvm
           cp bottles/*.json .
-          # Write the `bottle do` block into the formula (no commit).
-          brew bottle --merge --write --no-commit *.json
-          # `--write` edits brew's tap copy; copy it back for the PR.
-          cp "$(brew formula wasmedge/llvm/lld)" Formula/lld.rb
+          # Runners may bottle different formulae (lld, lld@<ver>); merge each
+          # formula's JSONs separately. The name before "--" is the formula.
+          prefixes=$(for f in *.bottle*.json; do echo "${f%%--*}"; done | sort -u)
+          for p in ${prefixes}; do
+            echo "Merging bottle block for ${p}"
+            brew bottle --merge --write --no-commit "${p}"--*.bottle*.json
+            # `--write` edits brew's tap copy; copy it back for the PR.
+            cp "$(brew formula "wasmedge/llvm/${p}")" "Formula/${p}.rb"
+          done
 
       - name: Publish bottles to the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd bottles
-          # brew writes double-dash local names but fetches single-dash; rename.
+          # brew writes double-dash local names but fetches single-dash; rename
+          # only the first "--" (formula<->version separator).
           for f in *.bottle*.tar.gz; do
             [ -e "$f" ] || continue
             mv -n "$f" "$(echo "$f" | sed 's/--/-/')"
@@ -120,19 +132,19 @@ jobs:
             --notes "Prebuilt lld bottles consumed by WasmEdge CI." \
           || gh release upload "${RELEASE_TAG}" *.bottle*.tar.gz --clobber
 
-      - name: Open a PR with the updated formula
+      - name: Open a PR with the updated formulae
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if git diff --quiet -- Formula/lld.rb; then
-            echo "Formula/lld.rb unchanged; nothing to PR."
+          if git diff --quiet -- Formula/; then
+            echo "No formula changed; nothing to PR."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c bottle/lld-update
-          git add Formula/lld.rb
-          git commit -s -m "feat: add prebuilt lld bottles"
+          git add Formula/
+          git commit -s -m "feat: refresh prebuilt lld bottles"
           git push -u origin bottle/lld-update --force
           gh pr create --fill --head bottle/lld-update --base main \
           || echo "PR not auto-created (enable 'Allow GitHub Actions to create PRs'); branch pushed for manual PR."
