@@ -53,6 +53,44 @@ Before updating `Formula/<name>.rb` to the new version, copy its current content
 
 After archiving, proceed to update `Formula/<name>.rb` to the new upstream version per the main workflow.
 
+## Regenerating Bottles (self-built tap)
+
+If the tap builds and serves its own bottles instead of pouring upstream
+homebrew-core ones, the `bottle do` block must be rebuilt on every version
+bump — the old block's version and `sha256`s no longer match the new source.
+
+This repo automates it via `.github/workflows/build-bottles.yml`:
+
+1. **Remove the `bottle do` block** as part of the version bump — never carry
+   the old `sha256`s forward. Until new bottles land, `brew install` builds
+   from source, which is correct (just slower).
+2. **Push the bump to a branch.** The workflow triggers on any change to
+   `Formula/<name>.rb` or the workflow file.
+3. The **build** job runs `brew install --build-bottle` + `brew bottle` on each
+   macOS runner in the matrix and uploads the `*.bottle*.tar.gz` +
+   `*.bottle*.json` artifacts.
+4. The **publish** job runs `brew bottle --merge --write` to regenerate the
+   block (correct `root_url` + per-OS `sha256`), uploads the tarballs to the
+   release, and opens a PR re-adding the block.
+5. **Merge that PR.** Afterwards `brew install <tap>/<name>` pours instead of
+   compiling.
+
+Notes:
+- The bottle **matrix mirrors the consuming CI's runners 1:1** — only build
+  bottles for OS/arch combos something actually pours. A platform without a
+  bottle just builds from source via a
+  `brew install <f> || brew install --build-from-source <f>` fallback.
+- `brew bottle` writes a **double-dash** local name
+  (`<name>--<version>.<tag>.bottle[.<rebuild>].tar.gz`), but Homebrew fetches
+  a custom-`root_url` bottle with a **single dash**. The workflow renames
+  `--`→`-` before upload; publish the single-dash names.
+- A 3rd-party tap must be trusted before `--build-bottle`:
+  `brew tap <user>/<tap> "$PWD" && brew trust <user>/<tap>`.
+- `cmake` (and any other `=> :build` dep) is pulled in only when building from
+  source. A poured bottle skips it, so the **consumer** must install such
+  build tools itself rather than relying on them as a side effect of the
+  formula's source build.
+
 ## Common Mistakes
 
 - Overwriting intentional local build flags with upstream values (e.g., reverting `OFF` to `ON` for `BUILD_SHARED_LIBS`)
@@ -62,3 +100,4 @@ After archiving, proceed to update `Formula/<name>.rb` to the new upstream versi
 - Skipping the archive step and overwriting the old version directly — this drops the ability for users to pin the previous version via `<formula>@<old-version>`
 - Forgetting `keg_only :versioned_formula` in the archived file — without it, the versioned formula will conflict with the main formula's symlinks at install time
 - Keeping the `bottle do` block in the archived file — those bottle URLs won't resolve under the new versioned filename
+- Bumping the version of a self-built-bottle tap but not regenerating the bottles — leaving consumers compiling from source, or (worse) keeping a stale `bottle do` block whose `sha256`s no longer match the new source. See [Regenerating Bottles](#regenerating-bottles-self-built-tap).
