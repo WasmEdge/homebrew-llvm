@@ -25,6 +25,11 @@ permissions:
 env:
   ROOT_URL: https://github.com/WasmEdge/homebrew-llvm/releases/download/bottle-lld
   RELEASE_TAG: bottle-lld
+  # Build against the runner image's pinned Homebrew (NOT the latest upstream):
+  # WasmEdge CI consumes lld without `brew update`, so it links the image's
+  # llvm. Updating here would bottle against a newer llvm than the consumer
+  # has and the bottle would be skipped as a version mismatch.
+  HOMEBREW_NO_AUTO_UPDATE: "1"
 
 jobs:
   build:
@@ -43,7 +48,6 @@ jobs:
 
       - name: Build the bottle for this runner's llvm version
         run: |
-          brew update
           # Tap THIS checkout so we bottle these formulae.
           brew tap WasmEdge/llvm "$PWD"
           # Homebrew won't load an untrusted 3rd-party tap without this.
@@ -102,7 +106,6 @@ jobs:
 
       - name: Merge bottle blocks into each formula
         run: |
-          brew update
           brew tap WasmEdge/llvm "$PWD"
           brew trust wasmedge/llvm
           cp bottles/*.json .
