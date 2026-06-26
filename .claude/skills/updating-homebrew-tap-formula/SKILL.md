@@ -75,10 +75,12 @@ bottle-block merge and rebuild forever):
    `llvm` version `V`, then bottles the formula whose version equals `V` —
    the main `lld` if it matches, otherwise the archived `lld@V`. This is the
    same selection WasmEdge's `Resolve matching lld formula` step makes, so
-   every runner pours a bottle built against the llvm it actually has. It
-   strips any existing `bottle do` block from that formula first (so the
-   rebuild number stays clean), then runs `brew install --build-bottle` +
-   `brew bottle`.
+   every runner pours a bottle built against the llvm it actually has. It is
+   **idempotent per (formula, tag)**: if the chosen formula already declares a
+   bottle for this runner's tag it skips entirely, so a re-run only fills
+   genuine gaps — it never rebuilds a working bottle (which would churn the
+   rebuild number or drop another runner's tag). Otherwise it runs
+   `brew install --build-bottle` + `brew bottle`.
 2. The **publish** job groups the uploaded JSONs by formula (the name before
    `--`), runs `brew bottle --merge --write` per formula to write each block
    (correct `root_url` + per-OS `sha256`), uploads the tarballs to the
