@@ -39,14 +39,21 @@ jobs:
       matrix:
         # 1:1 with WasmEdge CI's macOS runners (the sole consumer). macOS 15
         # arm64 has no CI job, so arm64_sequoia is intentionally never built.
+        # `tag` is the Homebrew bottle tag this runner produces; used to skip
+        # rebuilding a (formula, tag) bottle that already exists.
         include:
           - runner: macos-15-intel
+            tag: sequoia
           - runner: macos-14
+            tag: arm64_sonoma
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Build the bottle for this runner's llvm version
+        id: build
+        env:
+          TAG: ${{ matrix.tag }}
         run: |
           # Tap THIS checkout so we bottle these formulae.
           brew tap WasmEdge/llvm "$PWD"
@@ -68,16 +75,22 @@ jobs:
                  "Bump the main lld or archive this version first."
             exit 1
           fi
-          echo "Bottling ${FORMULA} against llvm ${LLVM_VERSION}"
 
-          # Drop any existing bottle block so the rebuilt bottle starts clean
-          # (no ever-incrementing rebuild number).
-          perl -0777 -pi -e 's/\n  bottle do\n.*?\n  end\n/\n/s' "${FORMULA_FILE}"
+          # Idempotent: skip if this (formula, tag) bottle already exists, so a
+          # re-run only fills genuine gaps -- it never rebuilds a working bottle
+          # (which would churn the rebuild number or drop another runner's tag).
+          if grep -qE "sha256 .*\b${TAG}:" "${FORMULA_FILE}"; then
+            echo "${FORMULA} already has a ${TAG} bottle; nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Bottling ${FORMULA} (${TAG}) against llvm ${LLVM_VERSION}"
 
           brew install --build-bottle "WasmEdge/llvm/${FORMULA}"
           brew bottle --json --root-url="${ROOT_URL}" "WasmEdge/llvm/${FORMULA}"
 
       - name: Upload bottle artifacts
+        if: steps.build.outputs.skip != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bottle-${{ matrix.runner }}
@@ -99,12 +112,24 @@ jobs:
           fetch-depth: 0
 
       - name: Download all bottle artifacts
+        continue-on-error: true # no artifacts when every runner skipped
         uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           path: bottles
           merge-multiple: true
 
+      - name: Check for new bottles
+        id: gate
+        run: |
+          if ls bottles/*.bottle*.json >/dev/null 2>&1; then
+            echo "has=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Every runner already had its bottle; nothing to publish."
+            echo "has=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Merge bottle blocks into each formula
+        if: steps.gate.outputs.has == 'true'
         run: |
           brew tap WasmEdge/llvm "$PWD"
           brew trust wasmedge/llvm
@@ -120,6 +145,7 @@ jobs:
           done
 
       - name: Publish bottles to the release
+        if: steps.gate.outputs.has == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -136,6 +162,7 @@ jobs:
           || gh release upload "${RELEASE_TAG}" *.bottle*.tar.gz --clobber
 
       - name: Open a PR with the updated formulae
+        if: steps.gate.outputs.has == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
