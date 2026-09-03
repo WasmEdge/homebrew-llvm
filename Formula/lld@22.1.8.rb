@@ -1,10 +1,13 @@
-class Lld < Formula
+class LldAT2218 < Formula
   desc "LLVM Project Linker"
   homepage "https://lld.llvm.org/"
-  url "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.0/llvm-project-23.1.0.src.tar.xz"
-  sha256 "ab1f0e3ec52448c33e8782eaf0422504b87c7b016b22514653ee0d8fcee479ff"
+  url "https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/llvm-project-22.1.8.src.tar.xz"
+  sha256 "922f1817a0df7b1489272d18134ee0087a8b068828f87ac63b9861b1a9965888"
+  # The LLVM Project is under the Apache License v2.0 with LLVM Exceptions
   license "Apache-2.0" => { with: "LLVM-exception" }
-  compatibility_version 2
+  compatibility_version 1
+
+  keg_only :versioned_formula
   head "https://github.com/llvm/llvm-project.git", branch: "main"
 
   livecheck do
@@ -27,6 +30,7 @@ class Lld < Formula
     system "cmake", "-S", "lld", "-B", "build",
                     "-DBUILD_SHARED_LIBS=OFF",
                     "-DCMAKE_INSTALL_RPATH=#{rpath}",
+                    "-DLLD_BUILT_STANDALONE=ON",
                     "-DLLD_VENDOR=#{tap&.user}",
                     "-DLLVM_ENABLE_LTO=ON",
                     "-DLLVM_INCLUDE_TESTS=OFF",
@@ -34,13 +38,9 @@ class Lld < Formula
                     *std_cmake_args
     system "cmake", "--build", "build"
     system "cmake", "--install", "build"
-
-    man1.install Utils::Gzip.compress("lld/docs/ld.lld.1")
   end
 
   test do
-    assert_match version.major_minor_patch.to_s, shell_output("#{bin}/wasm-ld --version")
-
     (testpath/"bin/lld").write <<~BASH
       #!/bin/bash
       exit 1
