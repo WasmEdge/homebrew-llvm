@@ -1,10 +1,12 @@
-class Lld < Formula
+class LldAT2310 < Formula
   desc "LLVM Project Linker"
   homepage "https://lld.llvm.org/"
-  url "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.1/llvm-project-23.1.1.src.tar.xz"
-  sha256 "ebe9be46fe8756d58c5b198ffad0fa2a766257add81a4dc52179bfacc7888ee6"
+  url "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.0/llvm-project-23.1.0.src.tar.xz"
+  sha256 "ab1f0e3ec52448c33e8782eaf0422504b87c7b016b22514653ee0d8fcee479ff"
   license "Apache-2.0" => { with: "LLVM-exception" }
   compatibility_version 2
+
+  keg_only :versioned_formula
   head "https://github.com/llvm/llvm-project.git", branch: "main"
 
   livecheck do
