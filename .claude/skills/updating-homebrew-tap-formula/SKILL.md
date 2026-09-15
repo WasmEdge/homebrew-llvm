@@ -34,6 +34,7 @@ Sync a custom Homebrew tap formula with its upstream homebrew-core counterpart w
 
 5. **Apply changes** selectively per the table above
 6. **Verify** the final formula reads correctly
+7. **Commit and push** using the exact shape in [Committing the Bump](#committing-the-bump) — fetch and rebase onto `origin/main` first
 
 ## Archiving the Old Version
 
@@ -115,6 +116,44 @@ Notes:
   build tools itself rather than relying on them as a side effect of the
   formula's source build.
 
+## Committing the Bump
+
+Every commit in this tap has one shape (reference: `f51a274`):
+
+```
+Update static lld for LLVM <new-version>
+
+Assisted-by: <model name> (Anthropic)
+Signed-off-by: <name> <email>
+```
+
+- Subject is exactly `Update static lld for LLVM <new-version>` — no
+  conventional-commit prefix (`chore:`, `feat:`), no body paragraph.
+- Trailers are `Assisted-by:` then `Signed-off-by:`. There is no
+  `Co-Authored-By:` line.
+- `<name> <email>` is the identity the committer already uses in this repo's
+  history (`git log --no-merges --format='%an <%ae>' -5`). It can differ from
+  `git config user.email`; the `-c` flags below set author, committer and
+  sign-off for this one commit without touching config.
+
+`main` moves between bumps (bottle PRs, other contributors), so fetch and
+rebase before committing — a push from a stale checkout is rejected as
+non-fast-forward:
+
+```bash
+git fetch origin && git rebase origin/main
+git add Formula/
+git -c user.name="<name>" -c user.email="<email>" commit --signoff -F - <<'EOF'
+Update static lld for LLVM <new-version>
+
+Assisted-by: <model name> (Anthropic)
+EOF
+git push origin main
+```
+
+`--signoff` appends `Signed-off-by:` after `Assisted-by:`, producing the
+reference shape.
+
 ## Common Mistakes
 
 - Overwriting intentional local build flags with upstream values (e.g., reverting `OFF` to `ON` for `BUILD_SHARED_LIBS`)
@@ -124,4 +163,6 @@ Notes:
 - Skipping the archive step and overwriting the old version directly — this drops the ability for users to pin the previous version via `<formula>@<old-version>`
 - Forgetting `keg_only :versioned_formula` in the archived file — without it, the versioned formula will conflict with the main formula's symlinks at install time
 - Keeping the `bottle do` block in the archived file — those bottle URLs won't resolve under the new versioned filename
+- Committing with a `chore:`-style subject or a `Co-Authored-By:` trailer instead of the shape in [Committing the Bump](#committing-the-bump)
+- Committing on a stale `main` (push rejected as non-fast-forward) — fetch and rebase first
 - Bumping the version of a self-built-bottle tap but not regenerating the bottles — leaving consumers compiling from source, or (worse) keeping a stale `bottle do` block whose `sha256`s no longer match the new source. See [Regenerating Bottles](#regenerating-bottles-self-built-tap).
