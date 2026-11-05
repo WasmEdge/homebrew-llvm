@@ -5,13 +5,13 @@ class LldAT2310 < Formula
   sha256 "ab1f0e3ec52448c33e8782eaf0422504b87c7b016b22514653ee0d8fcee479ff"
   license "Apache-2.0" => { with: "LLVM-exception" }
   compatibility_version 2
-
-  keg_only :versioned_formula
   head "https://github.com/llvm/llvm-project.git", branch: "main"
 
   livecheck do
     formula "llvm"
   end
+
+  keg_only :versioned_formula
 
   depends_on "cmake" => :build
   depends_on "llvm"
