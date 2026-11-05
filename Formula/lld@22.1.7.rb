@@ -6,6 +6,11 @@ class LldAT2217 < Formula
   # The LLVM Project is under the Apache License v2.0 with LLVM Exceptions
   license "Apache-2.0" => { with: "LLVM-exception" }
   compatibility_version 1
+  head "https://github.com/llvm/llvm-project.git", branch: "main"
+
+  livecheck do
+    formula "llvm"
+  end
 
   bottle do
     root_url "https://github.com/WasmEdge/homebrew-llvm/releases/download/bottle-lld"
@@ -14,11 +19,6 @@ class LldAT2217 < Formula
   end
 
   keg_only :versioned_formula
-  head "https://github.com/llvm/llvm-project.git", branch: "main"
-
-  livecheck do
-    formula "llvm"
-  end
 
   depends_on "cmake" => :build
   depends_on "llvm"
