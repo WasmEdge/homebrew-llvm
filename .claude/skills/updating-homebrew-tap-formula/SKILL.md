@@ -48,9 +48,9 @@ Before updating `Formula/<name>.rb` to the new version, copy its current content
    ```
 
 3. **Remove the inherited `bottle do` block.** Its `sha256`s belong to the unversioned name and won't resolve under the versioned filename. The archived version builds from source until the bottle workflow rebuilds a correct `<name>@<version>` bottle for it (see [Regenerating Bottles](#regenerating-bottles-self-built-tap)).
-4. **Add `keg_only :versioned_formula`** in place of the removed bottle block. This prevents the versioned install from conflicting with the main formula's symlinks.
+4. **Add `keg_only :versioned_formula`** after the `livecheck` block and before the first `depends_on`. Homebrew's component order is `head`, `livecheck`, `bottle`, `keg_only`, `depends_on`; `brew style` flags `FormulaAudit/ComponentsOrder` if `keg_only` (or a `bottle do` block) lands before `head`. This prevents the versioned install from conflicting with the main formula's symlinks.
 5. **Leave everything else (including `head`, `livecheck`, `link_overwrite`, dependency stanzas) byte-identical to the historical content.** The point of the archive is faithful historical preservation, not redesign.
-6. Verify with `ruby -c Formula/<name>@<current-version>.rb`.
+6. Verify with `ruby -c Formula/<name>@<current-version>.rb` and `brew style Formula/`.
 
 After archiving, proceed to update `Formula/<name>.rb` to the new upstream version per the main workflow.
 
@@ -162,6 +162,7 @@ reference shape.
 - Forgetting to check dependency block changes (e.g., `uses_from_macos` replaced by platform-specific `on_linux` blocks)
 - Skipping the archive step and overwriting the old version directly — this drops the ability for users to pin the previous version via `<formula>@<old-version>`
 - Forgetting `keg_only :versioned_formula` in the archived file — without it, the versioned formula will conflict with the main formula's symlinks at install time
+- Placing `keg_only` or a `bottle do` block before `head` — `brew style` fails `FormulaAudit/ComponentsOrder`; keep `head`, `livecheck`, `bottle`, `keg_only`, `depends_on` in that order
 - Keeping the `bottle do` block in the archived file — those bottle URLs won't resolve under the new versioned filename
 - Committing with a `chore:`-style subject or a `Co-Authored-By:` trailer instead of the shape in [Committing the Bump](#committing-the-bump)
 - Committing on a stale `main` (push rejected as non-fast-forward) — fetch and rebase first
