@@ -11,6 +11,12 @@ class LldAT2314 < Formula
     formula "llvm"
   end
 
+  bottle do
+    root_url "https://github.com/WasmEdge/homebrew-llvm/releases/download/bottle-lld"
+    rebuild 1
+    sha256 cellar: :any, arm64_sequoia: "0ebb9b6030385336a57ff55034488efddb6fe15fd702b686f0d97dd17a48f0dd"
+  end
+
   keg_only :versioned_formula
 
   depends_on "cmake" => :build
