@@ -37,15 +37,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 1:1 with WasmEdge CI's macOS runners (the sole consumer). macOS 15
-        # arm64 has no CI job, so arm64_sequoia is intentionally never built.
+        # 1:1 with WasmEdge CI's macOS runners (the sole consumer): its x86_64
+        # and arm64 jobs both run on macOS 15 now, so arm64_sonoma is no longer
+        # built (the macos-14 bottles already published stay and still pour).
         # `tag` is the Homebrew bottle tag this runner produces; used to skip
         # rebuilding a (formula, tag) bottle that already exists.
         include:
           - runner: macos-15-intel
             tag: sequoia
-          - runner: macos-14
-            tag: arm64_sonoma
+          - runner: macos-15
+            tag: arm64_sequoia
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
