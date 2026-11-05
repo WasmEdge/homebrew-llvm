@@ -34,7 +34,7 @@ Sync a custom Homebrew tap formula with its upstream homebrew-core counterpart w
 
 5. **Apply changes** selectively per the table above
 6. **Verify** the final formula reads correctly
-7. **Commit and push** using the exact shape in [Committing the Bump](#committing-the-bump) — fetch and rebase onto `origin/main` first
+7. **Commit and open a PR** using the exact shape in [Committing the Bump](#committing-the-bump) — fetch and rebase onto `origin/main` first
 
 ## Archiving the Old Version
 
@@ -118,19 +118,22 @@ Notes:
 
 ## Committing the Bump
 
-Every commit in this tap has one shape (reference: `f51a274`):
+Every commit in this tap uses Conventional Commits. A version bump is a
+`chore:` commit with this shape (reference: PR #16):
 
 ```
-Update static lld for LLVM <new-version>
+chore: update static lld for LLVM <new-version>
 
 Assisted-by: <model name> (Anthropic)
 Signed-off-by: <name> <email>
 ```
 
-- Subject is exactly `Update static lld for LLVM <new-version>` — no
-  conventional-commit prefix (`chore:`, `feat:`), no body paragraph.
+- Subject is exactly `chore: update static lld for LLVM <new-version>` — no
+  body paragraph; the explanation goes in the PR description.
 - Trailers are `Assisted-by:` then `Signed-off-by:`. There is no
   `Co-Authored-By:` line.
+- Anything else that rides along in the same PR gets its own commit with its
+  own type (`style:`, `ci(bottles):`, `docs(skill):`) — one concern each.
 - `<name> <email>` is the identity the committer already uses in this repo's
   history (`git log --no-merges --format='%an <%ae>' -5`). It can differ from
   `git config user.email`; the `-c` flags below set author, committer and
@@ -138,21 +141,30 @@ Signed-off-by: <name> <email>
 
 `main` moves between bumps (bottle PRs, other contributors), so fetch and
 rebase before committing — a push from a stale checkout is rejected as
-non-fast-forward:
+non-fast-forward. Bumps go up as a PR from an `update-lld-<new-version>`
+branch:
 
 ```bash
 git fetch origin && git rebase origin/main
+git switch -c update-lld-<new-version>
 git add Formula/
 git -c user.name="<name>" -c user.email="<email>" commit --signoff -F - <<'EOF'
-Update static lld for LLVM <new-version>
+chore: update static lld for LLVM <new-version>
 
 Assisted-by: <model name> (Anthropic)
 EOF
-git push origin main
+git push -u origin update-lld-<new-version>
+gh pr create --base main --title "chore: update static lld for LLVM <new-version>" --body-file pr-body.md
 ```
 
 `--signoff` appends `Signed-off-by:` after `Assisted-by:`, producing the
 reference shape.
+
+The PR title is the commit subject (a squash-merge reuses it as the `main`
+commit). The body says what was archived, whether a bottle block was
+dropped, what changed upstream, and which runner/llvm versions the bump
+serves. Never append a tool-attribution footer such as
+"🤖 Generated with Claude Code".
 
 ## Common Mistakes
 
@@ -164,6 +176,7 @@ reference shape.
 - Forgetting `keg_only :versioned_formula` in the archived file — without it, the versioned formula will conflict with the main formula's symlinks at install time
 - Placing `keg_only` or a `bottle do` block before `head` — `brew style` fails `FormulaAudit/ComponentsOrder`; keep `head`, `livecheck`, `bottle`, `keg_only`, `depends_on` in that order
 - Keeping the `bottle do` block in the archived file — those bottle URLs won't resolve under the new versioned filename
-- Committing with a `chore:`-style subject or a `Co-Authored-By:` trailer instead of the shape in [Committing the Bump](#committing-the-bump)
+- Committing with a bare `Update static lld ...` subject (no Conventional Commits type) or a `Co-Authored-By:` trailer instead of the shape in [Committing the Bump](#committing-the-bump)
+- Appending a tool-attribution footer ("🤖 Generated with Claude Code") to the PR description
 - Committing on a stale `main` (push rejected as non-fast-forward) — fetch and rebase first
 - Bumping the version of a self-built-bottle tap but not regenerating the bottles — leaving consumers compiling from source, or (worse) keeping a stale `bottle do` block whose `sha256`s no longer match the new source. See [Regenerating Bottles](#regenerating-bottles-self-built-tap).
